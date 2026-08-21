@@ -1,0 +1,221 @@
+-- Ruchi Malaysian Recipes Platform
+-- Import this first in phpMyAdmin (XAMPP)
+
+CREATE DATABASE IF NOT EXISTS ruchi_recipes
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE ruchi_recipes;
+
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS collection_items;
+DROP TABLE IF EXISTS collections;
+DROP TABLE IF EXISTS cooked_logs;
+DROP TABLE IF EXISTS favorites;
+DROP TABLE IF EXISTS ratings;
+DROP TABLE IF EXISTS comments;
+DROP TABLE IF EXISTS recipe_images;
+DROP TABLE IF EXISTS nutrition_info;
+DROP TABLE IF EXISTS recipe_steps;
+DROP TABLE IF EXISTS ingredients;
+DROP TABLE IF EXISTS recipe_diet_tags;
+DROP TABLE IF EXISTS diet_tags;
+DROP TABLE IF EXISTS recipes;
+DROP TABLE IF EXISTS follows;
+DROP TABLE IF EXISTS cuisines;
+DROP TABLE IF EXISTS users;
+SET FOREIGN_KEY_CHECKS = 1;
+
+CREATE TABLE users (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  role ENUM('USER','AUTHOR','MODERATOR','ADMIN') NOT NULL DEFAULT 'USER',
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(190) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NULL,
+  avatar_url VARCHAR(500) NULL,
+  cover_photo_url VARCHAR(500) NULL,
+  bio TEXT NULL,
+  is_verified_author TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE follows (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  follower_id INT UNSIGNED NOT NULL,
+  following_id INT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_follow (follower_id, following_id),
+  CONSTRAINT fk_follow_follower FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_follow_following FOREIGN KEY (following_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE cuisines (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE,
+  slug VARCHAR(120) NOT NULL UNIQUE,
+  hero_image_url VARCHAR(500) NULL,
+  description TEXT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE diet_tags (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE
+) ENGINE=InnoDB;
+
+CREATE TABLE recipes (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  slug VARCHAR(220) NOT NULL UNIQUE,
+  description TEXT NOT NULL,
+  author_id INT UNSIGNED NOT NULL,
+  cuisine_id INT UNSIGNED NOT NULL,
+  food_type ENUM('VEG','NON_VEG','VEGAN','EGGETARIAN') NOT NULL DEFAULT 'VEG',
+  meal_type ENUM('BREAKFAST','LUNCH','DINNER','SNACK','DESSERT','BEVERAGE') NOT NULL DEFAULT 'DINNER',
+  difficulty ENUM('EASY','MEDIUM','HARD') NOT NULL DEFAULT 'EASY',
+  prep_time_mins INT UNSIGNED NOT NULL DEFAULT 15,
+  cook_time_mins INT UNSIGNED NOT NULL DEFAULT 30,
+  servings INT UNSIGNED NOT NULL DEFAULT 4,
+  hero_image_url VARCHAR(500) NOT NULL,
+  video_clip_url VARCHAR(500) NULL,
+  status ENUM('DRAFT','SUBMITTED','PUBLISHED','REJECTED') NOT NULL DEFAULT 'DRAFT',
+  view_count INT UNSIGNED NOT NULL DEFAULT 0,
+  cooked_count INT UNSIGNED NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  published_at DATETIME NULL,
+  CONSTRAINT fk_recipe_author FOREIGN KEY (author_id) REFERENCES users(id),
+  CONSTRAINT fk_recipe_cuisine FOREIGN KEY (cuisine_id) REFERENCES cuisines(id),
+  INDEX idx_recipes_status (status),
+  INDEX idx_recipes_food_type (food_type),
+  INDEX idx_recipes_cuisine (cuisine_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE recipe_diet_tags (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL,
+  diet_tag_id INT UNSIGNED NOT NULL,
+  UNIQUE KEY uq_recipe_diet (recipe_id, diet_tag_id),
+  CONSTRAINT fk_rdt_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_rdt_tag FOREIGN KEY (diet_tag_id) REFERENCES diet_tags(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE ingredients (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  quantity DECIMAL(10,2) NOT NULL,
+  unit VARCHAR(40) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  is_optional TINYINT(1) NOT NULL DEFAULT 0,
+  CONSTRAINT fk_ing_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE recipe_steps (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL,
+  step_number INT UNSIGNED NOT NULL,
+  instruction TEXT NOT NULL,
+  image_url VARCHAR(500) NULL,
+  timer_seconds INT UNSIGNED NULL,
+  CONSTRAINT fk_step_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE nutrition_info (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL UNIQUE,
+  calories DECIMAL(8,2) NOT NULL,
+  protein_g DECIMAL(8,2) NOT NULL,
+  carbs_g DECIMAL(8,2) NOT NULL,
+  fat_g DECIMAL(8,2) NOT NULL,
+  fiber_g DECIMAL(8,2) NULL,
+  sugar_g DECIMAL(8,2) NULL,
+  sodium_mg DECIMAL(8,2) NULL,
+  per_serving TINYINT(1) NOT NULL DEFAULT 1,
+  CONSTRAINT fk_nut_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE recipe_images (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL,
+  url VARCHAR(500) NOT NULL,
+  caption VARCHAR(255) NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_img_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE comments (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  parent_id INT UNSIGNED NULL,
+  body TEXT NOT NULL,
+  is_author_reply TINYINT(1) NOT NULL DEFAULT 0,
+  is_flagged TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_cmt_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cmt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cmt_parent FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE ratings (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  stars TINYINT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_rating (recipe_id, user_id),
+  CONSTRAINT fk_rate_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_rate_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE favorites (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_fav (recipe_id, user_id),
+  CONSTRAINT fk_fav_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_fav_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE cooked_logs (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NOT NULL,
+  photo_url VARCHAR(500) NULL,
+  note TEXT NULL,
+  cooked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_cooked (recipe_id, user_id),
+  CONSTRAINT fk_cooked_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cooked_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE collections (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  description TEXT NULL,
+  is_public TINYINT(1) NOT NULL DEFAULT 0,
+  CONSTRAINT fk_col_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE collection_items (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  collection_id INT UNSIGNED NOT NULL,
+  recipe_id INT UNSIGNED NOT NULL,
+  added_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_col_item (collection_id, recipe_id),
+  CONSTRAINT fk_ci_col FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ci_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE notifications (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  type VARCHAR(60) NOT NULL,
+  message VARCHAR(500) NOT NULL,
+  link VARCHAR(255) NULL,
+  read_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
